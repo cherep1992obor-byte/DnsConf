@@ -1,7 +1,8 @@
 package com.novibe.dns.next_dns;
 
 import com.novibe.common.DnsTaskRunner;
-import com.novibe.common.data_sources.HostsOverrideListsLoader;
+import com.novibe.common.base_structures.BypassRoute;
+import com.novibe.common.util.DonorDnsUtils;
 import com.novibe.common.util.EnvParser;
 import com.novibe.common.util.Log;
 import com.novibe.dns.next_dns.http.dto.request.CreateRewriteDto;
@@ -15,6 +16,7 @@ import java.util.Map;
 
 import static com.novibe.common.config.EnvironmentVariables.BLOCK;
 import static com.novibe.common.config.EnvironmentVariables.REDIRECT;
+import static java.util.Objects.nonNull;
 
 @Service
 @RequiredArgsConstructor
@@ -54,7 +56,12 @@ public class NextDnsTaskRunner extends DnsTaskRunner {
         if (!rewriteSources.isEmpty()) {
 
             Log.step("Obtain rewrite lists from %s sources".formatted(rewriteSources.size()));
-            List<HostsOverrideListsLoader.BypassRoute> overrides = overrideListsLoader.fetchWebsites(rewriteSources);
+            List<BypassRoute> overrides = overrideListsLoader.fetchWebsites(rewriteSources);
+
+            if (nonNull(dnsProfile.donorDns())) {
+                Log.step("Replace IP of domains via IPs from " + dnsProfile.donorDns());
+                DonorDnsUtils.replaceIPs(overrides, dnsProfile);
+            }
 
             Log.step("Prepare rewrites");
             Map<String, CreateRewriteDto> requests = nextDnsRewriteService.buildNewRewrites(overrides);

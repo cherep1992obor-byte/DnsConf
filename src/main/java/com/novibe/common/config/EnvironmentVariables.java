@@ -18,6 +18,8 @@ public class EnvironmentVariables {
 
     public static final String EXCLUDE_REDIRECT = System.getenv("EXCLUDE_REDIRECT");
 
+    public static final String DONOR_DNS = System.getenv("DONOR_DNS");
+
     private static String extractMandatoryVariable(String key) {
         String env = System.getenv(key);
         if (isNull(env) || env.isBlank()) {

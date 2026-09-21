@@ -1,15 +1,13 @@
 package com.novibe.common.data_sources;
 
+import com.novibe.common.base_structures.BypassRoute;
 import com.novibe.common.base_structures.HostsLine;
 import org.springframework.stereotype.Service;
 
 import java.util.function.Predicate;
 
 @Service
-public class HostsOverrideListsLoader extends ListLoader<HostsOverrideListsLoader.BypassRoute> {
-
-    public record BypassRoute(String ip, String website) {
-    }
+public class HostsOverrideListsLoader extends ListLoader<BypassRoute> {
 
     @Override
     protected String listType() {

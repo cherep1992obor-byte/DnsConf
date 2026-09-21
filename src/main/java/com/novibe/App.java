@@ -34,7 +34,7 @@ public class App {
                 Log.fail(credentialsException.getMessage());
             } catch (Exception exception) {
                 Log.fail("Unexpected exception on profile " + dnsProfile.number());
-                exception.printStackTrace(System.out);
+                throw exception;
             } finally {
                 if (nonNull(currentContext)) currentContext.close();
             }
@@ -57,7 +57,7 @@ public class App {
         AnnotationConfigApplicationContext currentContext = new AnnotationConfigApplicationContext();
         currentContext.setParent(commonContext);
         currentContext.scan(dnsBasePackage);
-        currentContext.registerBean("DnsProfile", DnsProfile.class, () -> dnsProfile);
+        currentContext.registerBean(DnsProfile.class, () -> dnsProfile);
         currentContext.refresh();
         return currentContext;
     }

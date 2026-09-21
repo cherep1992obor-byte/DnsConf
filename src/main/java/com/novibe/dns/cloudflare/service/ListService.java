@@ -1,6 +1,6 @@
 package com.novibe.dns.cloudflare.service;
 
-import com.novibe.common.data_sources.HostsOverrideListsLoader;
+import com.novibe.common.base_structures.BypassRoute;
 import com.novibe.common.service.ExcludeRedirectCheckService;
 import com.novibe.common.util.FunctionWrapper;
 import com.novibe.common.util.Log;
@@ -12,10 +12,14 @@ import com.novibe.dns.cloudflare.http.dto.response.list.GatewayListDto;
 import com.novibe.dns.cloudflare.http.dto.response.list.SingleListApiResponse;
 import lombok.Cleanup;
 import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -33,8 +37,6 @@ public class ListService {
     private final ExcludeRedirectCheckService excludeRedirectCheckService;
     private final String sessionId;
 
-
-    @SneakyThrows
     public List<GatewayListDto> createNewBlockLists(List<String> websitesToBlock) {
 
         List<List<Item>> websitesByChunks = cutChunks(websiteAsItem(websitesToBlock));
@@ -46,13 +48,12 @@ public class ListService {
         return saveNewLists(createListRequests);
     }
 
-    public void omitExcludedOverrides(List<HostsOverrideListsLoader.BypassRoute> routes) {
+    public void omitExcludedOverrides(List<BypassRoute> routes) {
         routes.removeIf(route -> excludeRedirectCheckService.shouldExclude(route.website()));
     }
 
 
-    @SneakyThrows
-    public Map<String, List<GatewayListDto>> createNewOverrideLists(List<HostsOverrideListsLoader.BypassRoute> routes) {
+    public Map<String, List<GatewayListDto>> createNewOverrideLists(List<BypassRoute> routes) {
 
         Map<String, List<GatewayListDto>> result = new HashMap<>();
 
@@ -60,7 +61,7 @@ public class ListService {
 
         for (Map.Entry<String, List<CreateListRequest>> entry : requests.entrySet()) {
             String overrideIp = entry.getKey();
-            Log.io("Posting override lists for IP: " + overrideIp);
+            Log.io("Posting %s override lists for IP: %s" .formatted(entry.getValue().size(), overrideIp));
             List<GatewayListDto> response = saveNewLists(entry.getValue());
             result.put(overrideIp, response);
         }
@@ -86,7 +87,7 @@ public class ListService {
                 .map(id -> executor.submit(() -> cloudflareListClient.deleteListById(id)))
                 .map(FunctionWrapper.wrap(Future::get))
                 .peek(response -> {
-                    if (response.isSuccess()) Log.progress(counter.incrementAndGet() + "/" + oldIds.size());
+                    if (response.isSuccess()) Log.progress(counter.incrementAndGet() + "/" + oldIds.size() + " removed");
                 })
                 .filter(response -> !response.isSuccess())
                 .map(SingleListApiResponse::getErrors)
@@ -99,38 +100,37 @@ public class ListService {
         }
     }
 
-    @SneakyThrows
     private List<GatewayListDto> saveNewLists(List<CreateListRequest> createListRequests) {
-        Log.io("Saving " + createListRequests.size() + " lists...");
-        @Cleanup ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-        List<Future<SingleListApiResponse>> futures = createListRequests.stream()
-                .map(list -> executor.submit(() -> cloudflareListClient.postList(list)))
-                .toList();
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<SingleListApiResponse>> futures = createListRequests.stream()
+                    .map(list -> executor.submit(() -> cloudflareListClient.postList(list)))
+                    .toList();
 
-        List<List<CloudflareApiMessage>> errors = new ArrayList<>();
-        List<GatewayListDto> result = new ArrayList<>();
-        int counter = 0;
-        for (Future<SingleListApiResponse> res : futures) {
-            SingleListApiResponse response = res.get();
-            if (response.isSuccess()) {
-                Log.progress(++counter + "/" + createListRequests.size());
-                result.add(response.getResult());
-            } else {
-                errors.add(response.getErrors());
+            List<List<CloudflareApiMessage>> errors = new ArrayList<>();
+            List<GatewayListDto> result = new ArrayList<>();
+            int counter = 0;
+            for (Future<SingleListApiResponse> res : futures) {
+                SingleListApiResponse response = res.get();
+                if (response.isSuccess()) {
+                    Log.progress(++counter + "/" + createListRequests.size() + " saved");
+                    result.add(response.getResult());
+                } else {
+                    errors.add(response.getErrors());
+                }
             }
+            if (!errors.isEmpty()) {
+                Log.fail("Failed to save new lists (%s of %s): %s".formatted(errors.size(), createListRequests.size(), errors));
+            }
+            return result;
+        } catch (ExecutionException | InterruptedException e) {
+            throw new RuntimeException(e);
         }
-        if (errors.isEmpty()) {
-            Log.common("\n%s of %s new lists have been saved".formatted(counter, createListRequests.size()));
-        } else {
-            Log.fail("Failed to save new lists (%s of %s): %s".formatted(errors.size(), createListRequests.size(), errors));
-        }
-        return result;
     }
 
-    Map<String, List<CreateListRequest>> formOverrideListRequestsByIp(List<HostsOverrideListsLoader.BypassRoute> routes) {
+    Map<String, List<CreateListRequest>> formOverrideListRequestsByIp(List<BypassRoute> routes) {
         Map<String, String> mergedWebsiteOnIp = new HashMap<>();
         //Priority of IP is provided by sources order
-        for (HostsOverrideListsLoader.BypassRoute route : routes) {
+        for (BypassRoute route : routes) {
             mergedWebsiteOnIp.putIfAbsent(route.website(), route.ip());
         }
         //Group to lists by IP
@@ -173,18 +173,16 @@ public class ListService {
         return urlsToBlock.stream().map(Item::new).toList();
     }
 
-    private static <T> List<List<T>> cutChunks(List<T> list) {
+    static <T> List<List<T>> cutChunks(List<T> list) {
         final int chunkSize = 1000;
         List<List<T>> chunks = new ArrayList<>();
         if (list.size() <= chunkSize) {
             chunks = List.of(list);
 
         } else {
-            for (int i = 0; list.size() > i + chunkSize; i += chunkSize) {
-                chunks.add(list.subList(i, i + chunkSize));
+            for (int i = 0; i < list.size(); i += chunkSize) {
+                chunks.add(list.subList(i, Math.min(i + chunkSize, list.size())));
             }
-            int tail = list.size() % chunkSize;
-            chunks.add(list.subList(list.size() - tail, list.size()));
         }
         return chunks;
     }

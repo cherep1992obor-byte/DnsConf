@@ -1,7 +1,8 @@
 package com.novibe.dns.cloudflare;
 
 import com.novibe.common.DnsTaskRunner;
-import com.novibe.common.data_sources.HostsOverrideListsLoader.BypassRoute;
+import com.novibe.common.base_structures.BypassRoute;
+import com.novibe.common.util.DonorDnsUtils;
 import com.novibe.common.util.EnvParser;
 import com.novibe.common.util.Log;
 import com.novibe.dns.cloudflare.http.dto.response.list.GatewayListDto;
@@ -17,6 +18,7 @@ import java.util.Map;
 
 import static com.novibe.common.config.EnvironmentVariables.BLOCK;
 import static com.novibe.common.config.EnvironmentVariables.REDIRECT;
+import static java.util.Objects.nonNull;
 
 
 @Service
@@ -66,6 +68,12 @@ public class CloudflareTaskRunner extends DnsTaskRunner {
         Log.step("Creating new override lists");
         if (!overrides.isEmpty()) {
             listService.omitExcludedOverrides(overrides);
+
+            if (nonNull(dnsProfile.donorDns())) {
+                Log.step("Replace IP of domains via IPs from " + dnsProfile.donorDns());
+                DonorDnsUtils.replaceIPs(overrides, dnsProfile);
+            }
+
             Map<String, List<GatewayListDto>> newOverrideLists = listService.createNewOverrideLists(overrides);
 
             Log.step("Creating new override rules");

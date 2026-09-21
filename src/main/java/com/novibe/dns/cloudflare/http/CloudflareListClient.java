@@ -5,7 +5,6 @@ import com.novibe.dns.cloudflare.http.dto.response.list.GatewayListDto;
 import com.novibe.dns.cloudflare.http.dto.response.list.MultiListApiResponse;
 import com.novibe.dns.cloudflare.http.dto.response.list.SingleListApiResponse;
 import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
 import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 
@@ -22,18 +21,15 @@ public class CloudflareListClient {
 
     private final RequestCloudflare requestCloudflare;
 
-    @SneakyThrows
     public List<GatewayListDto> getLists() {
         List<GatewayListDto> lists = requestCloudflare.get(path, MultiListApiResponse.class).getResult();
         return Objects.requireNonNullElse(lists, List.of());
     }
 
-    @SneakyThrows
     public SingleListApiResponse postList(CreateListRequest createListRequest) {
         return requestCloudflare.post(path, createListRequest, SingleListApiResponse.class);
     }
 
-    @SneakyThrows
     public SingleListApiResponse deleteListById(UUID listId) {
         return requestCloudflare.delete(path + "/" + listId, SingleListApiResponse.class);
     }
