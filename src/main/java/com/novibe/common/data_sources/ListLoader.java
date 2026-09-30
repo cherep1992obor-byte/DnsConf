@@ -44,6 +44,7 @@ public abstract class ListLoader<T> {
                     .map(StructuredTaskScope.Subtask::get)
                     .flatMap(DataParser::splitByEol)
                     .map(String::strip)
+                    .parallel()
                     .filter(line -> !line.isBlank())
                     .filter(line -> !DataParser.isComment(line))
                     .map(String::toLowerCase)

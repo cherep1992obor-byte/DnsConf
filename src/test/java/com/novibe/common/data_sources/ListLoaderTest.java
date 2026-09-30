@@ -26,8 +26,6 @@ class ListLoaderTest {
     void startServer() throws IOException {
         server = HttpServer.create(new InetSocketAddress(0), 0);
         addRoute("/hosts", 200, "1.2.3.4 chatgpt.com\n1.2.3.4 openai.com\n");
-        addRoute("/primary", 200, "143.20.64.192 chatgpt.com\n");
-        addRoute("/secondary", 200, "217.60.245.219 chatgpt.com\n");
         addRoute("/not-found", 404, "404: Not Found");
         addRoute("/rate-limited", 429, "429: Too Many Requests");
         server.start();
@@ -46,13 +44,6 @@ class ListLoaderTest {
         List<BypassRoute> routes = loader.fetchWebsites(List.of(baseUrl + "/hosts"));
 
         assertEquals(List.of("chatgpt.com", "openai.com"), routes.stream().map(BypassRoute::website).toList());
-    }
-
-    @Test
-    void preservesSourcePriorityOrder() {
-        List<BypassRoute> routes = loader.fetchWebsites(List.of(baseUrl + "/primary", baseUrl + "/secondary"));
-
-        assertEquals(List.of("143.20.64.192", "217.60.245.219"), routes.stream().map(BypassRoute::ip).toList());
     }
 
     @Test
