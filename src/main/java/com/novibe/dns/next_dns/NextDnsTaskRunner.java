@@ -57,6 +57,7 @@ public class NextDnsTaskRunner extends DnsTaskRunner {
 
             Log.step("Obtain rewrite lists from %s sources".formatted(rewriteSources.size()));
             List<BypassRoute> overrides = overrideListsLoader.fetchWebsites(rewriteSources);
+            addGeoHideOpenAiCompanion(overrides, rewriteSources);
 
             if (nonNull(dnsProfile.donorDns())) {
                 Log.step("Replace IP of domains via IPs from " + dnsProfile.donorDns());
@@ -78,6 +79,23 @@ public class NextDnsTaskRunner extends DnsTaskRunner {
             nextDnsDenyService.removeAll();
             nextDnsRewriteService.removeAll();
         }
+    }
+
+    private void addGeoHideOpenAiCompanion(List<BypassRoute> overrides, List<String> rewriteSources) {
+        boolean geoHideOnly = rewriteSources.stream().allMatch(source -> source.contains("geohide.ru/"));
+        boolean alreadyPresent = overrides.stream().anyMatch(route -> route.website().equals("oaistatsig.com"));
+        if (!geoHideOnly || alreadyPresent) {
+            return;
+        }
+
+        overrides.stream()
+                .filter(route -> route.website().equals("oaistatic.com"))
+                .findFirst()
+                .or(() -> overrides.stream().filter(route -> route.website().equals("openai.com")).findFirst())
+                .ifPresent(route -> {
+                    overrides.add(new BypassRoute(route.ip(), "oaistatsig.com"));
+                    Log.io("Added oaistatsig.com through the GeoHide OpenAI server");
+                });
     }
 
     @Override
