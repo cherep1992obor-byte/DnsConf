@@ -15,8 +15,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static java.util.Objects.nonNull;
-
 @Service
 @RequiredArgsConstructor
 public class NextDnsRewriteService {
@@ -45,7 +43,7 @@ public class NextDnsRewriteService {
                 continue;
             }
             CreateRewriteDto request = newRewriteRequests.get(domain);
-            if (nonNull(request) && !request.content().equals(oldIp)) {
+            if (request == null || !request.content().equals(oldIp)) {
                 outdatedIds.add(existingRewrite.id());
             } else {
                 newRewriteRequests.remove(domain);
