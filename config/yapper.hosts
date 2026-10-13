@@ -1,0 +1,4 @@
+# Yapper: use current Vercel edges because the legacy apex IP times out.
+216.150.1.1 yapper.so
+216.150.1.1 www.yapper.so
+199.36.158.100 auth.yapper.so
